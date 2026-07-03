@@ -102,7 +102,7 @@ const AuthorityPortal = () => {
       const token = user?.token;
       const baseUrl = window.location.origin.includes('localhost') || window.location.origin.includes('127.0.0.1')
         ? 'http://localhost:5000/api'
-        : '/api';
+        : 'https://civicpulse-1-92mg.onrender.com/api';
       const res = await fetch(`${baseUrl}/issues/${selectedIssueId}/recommend-staff`, {
         headers: {
           'Authorization': `Bearer ${token}`
