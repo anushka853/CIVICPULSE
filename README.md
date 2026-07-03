@@ -1,96 +1,202 @@
-# 🏆 CivicPulse AI — Hackathon Edition
+🏆 CivicPulse AI — Trash2Task
+"Bridging the Gap Between Citizens and Civic Action — One Report at a Time"
 
-**CivicPulse AI** is a state-of-the-art, gamified community reporting, tracking, and resolution platform. Built on the **MERN Stack** (MongoDB, Express, React, Node.js) and powered by **Google Gemini 2.5 Flash** (via the Google AI Studio SDK), it solves community problems like potholes, garbage accumulation, and broken streetlights through citizen consensus and automated validation.
+🔗 Live Demo: https://trash2-task.vercel.app
 
----
+📦 Repository: https://github.com/anushka853/Trash2Task
 
-## ✨ Hackathon Highlights (Why This Wins)
+👩‍💻 Solo Project — Built End to End
 
-1. **Multimodal AI Auto-reporting:** Citizens take a photo and upload it. The Gemini AI automatically generates a concise title, selects the correct category, writes a description, sets the severity tier (with written justification), and gives safety recommendations—reducing reporting friction to zero!
-2. **Double-Blind Resolution Audit:** Municipal authorities claim they fixed a pothole? They must upload a photo of the completed work. CivicPulse's backend sends the original issue image and the resolution image to Gemini to verify if the work was actually completed, preventing fraudulent ticket closures.
-3. **Algorithmic Spatial Hotspot Prediction:** The analytics engine clusters active reports within proximity and alerts municipal workers to geographical hotspots, enabling predictive planning rather than reactive cleanup.
-4. **Core-Loop Citizen Gamification:** Citizen engagement is incentivized by awarding **XP (Experience Points)**, calculating **Levels**, and unlocking **Badges** (e.g., *Spotter*, *Civic Guard*, *Trustworthy Verifier*, *City Hero*) for reporting and validating reports.
+⸻
+🌆 The Problem
+Every day, citizens witness civic issues — overflowing garbage, broken roads, dark streets, flooded lanes — but have no fast, trusted way to report them. Complaints get lost in phone calls and paperwork. Authorities lack real-time visibility. Resolution takes weeks. Civic trust erodes.
 
----
 
-## 🛠️ Technology Stack
+💡 The Solution
+CivicPulse AI turns every citizen into a civic sensor. Snap a photo, let AI detect and categorize the issue instantly, and watch it flow seamlessly from report → verification → task assignment → live resolution — all tracked, all transparent, all gamified to keep people engaged.
+This isn't just a complaint app. It's a civic engagement engine — built to make reporting effortless, resolution fast, and participation addictive.
 
-* **Frontend:** React.js (Vite), React Router v6, Leaflet Maps (react-leaflet), Chart.js (react-chartjs-2), Lucide Icons.
-* **Backend:** Node.js, Express, Multer (image storage), JWT (authentication), BcryptJS (password hashing).
-* **Database:** MongoDB (via Mongoose).
-* **AI Engine:** Google Gemini AI Node SDK (`@google/genai`).
 
----
+🚀 Built as a Hackathon Project, engineered with a real-world vision: cleaner, smarter, more responsive cities — powered by AI and community action.
+⸻
 
-## 🚀 Local Quickstart Guide
+✨ Features That Set It Apart
 
-### 1. Prerequisite Setup
-* Make sure you have **Node.js** (v18+) and **MongoDB** (local community server or Atlas URI) installed.
-* Get your free Gemini API Key from **[Google AI Studio](https://aistudio.google.com/)**.
+🤖 AI-Powered Smart Reporting
+Snap a photo or record a video -- Google Gemini AI instantly detects, classifies, and routes the issue — no manual forms, no friction.
 
-### 2. Configure Backend
-1. Open the `/backend` directory.
-2. Edit the `.env` file and populate it:
-   ```env
-   PORT=5000
-   MONGODB_URI=your_mongodb_connection_string
-   JWT_SECRET=your_jwt_signing_secret
-   GEMINI_API_KEY=your_google_ai_studio_api_key
-   ```
-3. Run:
-   ```bash
-   npm install
-   npm run start
-   ```
+🏷️ Intelligent Auto-Categorization
+Garbage, potholes, streetlights, waterlogging — every issue auto-sorted for the right team, instantly.
 
-### 3. Configure Frontend
-1. Open the `/frontend` directory.
-2. Verify dependency installation and run the Vite dev server:
-   ```bash
-   npm install
-   npm run dev
-   ```
-3. Open `http://localhost:5173` in your browser.
+🔔 Real-Time Alerts & Notifications
+Citizens, workers, and admins stay in sync with instant in-app alerts at every stage — verified, assigned, in-progress, resolved. Nobody is left guessing.
 
----
+🌐 Multi-Language Support — Real-time translation so citizens can report in their native language (e.g., Hindi ↔ English) while the AI/ML pipeline standardizes it for admins
 
-## 🌐 Production Deployment Guide (Step-by-Step)
+🛠️ Powerful Admin Command Center
+A centralized dashboard giving municipal authorities full visibility and control — monitor, verify, assign, and resolve, all from one place.
 
-To deploy the app so judges can test it live:
+👥 Interactive Citizen Dashboard
+A personalized space where users track their reports, watch their rank climb, see nearby issues, and feel the pulse of their community.
 
-### Step 1: Deploy MongoDB Database
-1. Create a free account at **[MongoDB Atlas](https://www.mongodb.com/products/platform/atlas-database)**.
-2. Create a shared cluster and database.
-3. Obtain your connection string: `mongodb+srv://<username>:<password>@cluster.mongodb.net/civicpulse?retryWrites=true&w=majority`
-4. Whitelist IP access to `0.0.0.0/24` (access from anywhere) so production hosting providers can read/write data.
+📊 Live Citizen Ranking System
+Every report fuels your rank. Quality, accuracy, and consistency push citizens up a real-time, city-wide leaderboard — turning civic duty into friendly competition.
 
-### Step 2: Deploy Backend API (Render / Railway / Render RECOMMENDED)
-1. Commit the project to a **GitHub repository**.
-2. Create an account at **[Render.com](https://render.com/)**.
-3. Create a **New Web Service** and link your GitHub repository.
-4. Set the **Root Directory** to `backend`.
-5. Set the **Build Command** to `npm install`.
-6. Set the **Start Command** to `npm start`.
-7. Under **Environment Variables**, add:
-   * `PORT` = `5000`
-   * `MONGODB_URI` = *(Your MongoDB Atlas URI from Step 1)*
-   * `JWT_SECRET` = *(Some secure random string)*
-   * `GEMINI_API_KEY` = *(Your API Key from Google AI Studio)*
-8. Click **Deploy**. Copy the resulting service URL (e.g. `https://civicpulse-backend.onrender.com`).
+👷 Smart Worker Task Assignment + GPS Tracking
+Tasks are dispatched to field workers in real time, with live GPS tracking — so admins and citizens can literally watch resolution happen.
 
-### Step 3: Connect Frontend to Backend URL
-1. In the frontend, the API base URL is specified in `frontend/src/context/GlobalContext.jsx` at the top:
-   ```javascript
-   const API_BASE_URL = 'http://localhost:5000/api';
-   ```
-2. Replace `'http://localhost:5000/api'` with your Render URL:
-   ```javascript
-   const API_BASE_URL = 'https://civicpulse-backend.onrender.com/api';
-   ```
-3. Save changes and commit them to your repository.
+📍 End-to-End Live Issue Tracking
+From the moment it's reported to the moment it's resolved — full transparency, zero black boxes.
 
-### Step 4: Deploy Frontend (Vercel / Netlify / Vercel RECOMMENDED)
-1. Go to **[Vercel.com](https://vercel.com/)** and import your GitHub repository.
-2. Set the **Root Directory** to `frontend`.
-3. Set the Framework Preset to **Vite**.
-4. Click **Deploy**. Vercel will automatically compile, optimize, and serve your React application globally.
+🗺️ Interactive Live Map
+A real-time geographic view of every reported issue and every worker on the move — civic action, visualized.
+
+🏆 Gamified XP & Rewards System
+Every verified report earns XP. Every citizen levels up. Civic responsibility, rewarded.
+
+🎖️ Achievement Badges That Drive Participation
+A full badge system designed to keep citizens engaged long-term:
+
+🥉 Bronze Reporter — First issue reported
+
+🥈 Silver Watcher — 10+ verified reports
+
+🥇 Gold Guardian — 25+ verified reports
+
+💎 Platinum Champion — Top contributor city-wide
+
+🔥 Streak Star — Consistent weekly reporting
+
+✅ Verified Voice — Consistently accurate, trusted reports
+
+🌐 Built for Bharat — Multi-Language Access
+Available in English and Kannada, architected to scale across India's regional languages — because civic power belongs to everyone, not just the English-speaking few.
+
+📊 City-Wide Analytics Dashboard
+Real-time performance metrics, resolution trends, and city health insights — powered by Chart.js, built for decision-makers.
+⸻
+🧱 Tech Stack — Engineered for Speed & Scale
+
+💻 Frontend
+
+⚛️ React.js — Fast, component-driven UI
+
+⚡ Vite — Lightning-fast builds
+
+🧭 React Router — Seamless navigation
+
+🗺️ Leaflet — Live maps & GPS visualization
+
+📊 Chart.js — Real-time analytics
+
+🌐 i18n (planned) — English & Kannada, expanding further
+
+🔧 Backend
+
+🟢 Node.js + Express.js — Robust REST API
+
+🔐 JWT Authentication — Secure, role-based access (citizen / worker / admin)
+
+📤 Multer — Seamless image uploads
+
+🔔 Notification Engine — Instant real-time alerts
+
+📡 GPS Tracking Service — Live worker location updates
+
+
+🗄️ Database
+
+🍃 MongoDB — Flexible, scalable data storage
+
+🧠 AI
+
+✨ Google Gemini API — Intelligent image-based issue detection
+
+☁️ Deployment
+
+▲ Vercel — Live, production-grade hosting
+✨Render -- For backend deployment
+
+⸻
+🗂️ Project Structure
+
+Trash2Task/
+
+├── backend/          # Express API, models, routes, auth, AI integration
+
+├── frontend/         # React + Vite client application
+
+├── .gitignore
+
+└── README.md
+⸻
+
+🚀 Getting Started
+
+✅ Prerequisites
+
+Node.js (v18+ recommended)
+MongoDB (local instance or MongoDB Atlas)
+A Google Gemini API key
+
+1️⃣ Clone the repository
+git clone https://github.com/anushka853/Trash2Task.git
+cd Trash2Task
+
+2️⃣ Backend Setup
+cd backend
+npm install
+
+Create a .env file inside backend/:
+
+PORT=5000
+
+MONGODB_URI=your_mongodb_connection_string
+
+JWT_SECRET=your_jwt_secret
+
+GEMINI_API_KEY=your_google_gemini_api_key
+
+npm start
+
+
+3️⃣ Frontend Setup
+cd frontend
+npm install
+npm run dev
+
+🌐 Runs on http://localhost:5173 by default, connected live to the backend API.
+
+⸻
+
+🌍 Experience It Live
+
+👉 https://trash2-task.vercel.app
+⸻
+🛣️ What's Next
+
+🔔 Full push notification system (mobile + web)
+
+🌐 Expanding language support: Hindi, Tamil, Telugu, Marathi & more
+
+📱 Native mobile app (React Native)
+
+🏛️ Direct integration with municipal government systems
+
+📶 Offline-first reporting for low-connectivity regions
+
+🎖️ Seasonal & city-wide leaderboard competitions
+
+📡 AI-driven GPS route optimization for field teams
+
+⸻
+🤝 Join the Mission
+Got an idea to make cities smarter? Contributions are welcome!
+
+
+⸻
+📄 License
+Open-source under the MIT License. Use it, build on it, make your city better.
+⸻
+
+🌱 Every report is a small act of change. CivicPulse AI turns thousands of small acts into a cleaner, smarter city.
