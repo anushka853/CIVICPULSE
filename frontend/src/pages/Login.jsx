@@ -25,8 +25,7 @@ const Login = () => {
     user, 
     sendOtp, 
     submitForgotPassword, 
-    submitResetPassword,
-    googleLogin
+    submitResetPassword
   } = useContext(GlobalContext);
 
 
@@ -78,64 +77,6 @@ const Login = () => {
     setError('');
     setInfo('');
   };
-
-  // Load and initialize Google OAuth script
-  useEffect(() => {
-    // Add Google GSI Client Script
-    const script = document.createElement('script');
-    script.src = 'https://accounts.google.com/gsi/client';
-    script.async = true;
-    script.defer = true;
-    document.body.appendChild(script);
-
-    script.onload = () => {
-      // Initialize GSI client
-      const clientId = '9876543210-mockclientid.apps.googleusercontent.com'; 
-      if (window.google) {
-        window.google.accounts.id.initialize({
-          client_id: clientId,
-          callback: handleGoogleCredentialResponse,
-        });
-
-        // Render the standard button inside our container
-        window.google.accounts.id.renderButton(
-          document.getElementById('googleSignInDiv'),
-          { theme: 'outline', size: 'large', text: 'continue_with', shape: 'rectangular' }
-        );
-      }
-    };
-
-    return () => {
-      if (document.body.contains(script)) {
-        document.body.removeChild(script);
-      }
-    };
-  }, [isRegister]);
-
-  const handleGoogleCredentialResponse = async (response) => {
-    setError('');
-    setInfo('');
-    setOtpLoading(true);
-    try {
-      // Send Google credential token to backend
-      const res = await googleLogin(response.credential, activeTab);
-      if (res.success) {
-        if (res.user.role !== activeTab) {
-          setError(`Google Account is registered as a ${res.user.role}. Please select the correct Workspace tab at the top.`);
-          logout();
-          return;
-        }
-        navigate('/');
-      } else {
-        setError(res.error || 'Google login failed.');
-      }
-    } catch (err) {
-      setError(err.message || 'Google login failed');
-    } finally {
-      setOtpLoading(false);
-    }
-  };
-
 
   // Send Registration OTP
   const handleSendRegisterOtp = async () => {
@@ -309,49 +250,6 @@ const Login = () => {
         overflowY: 'auto',
         borderRadius: '24px'
       }}>
-        
-        {/* Workspace Portal Selector */}
-        {!forgotMode && (
-          <div style={{
-            display: 'flex',
-            background: 'rgba(0,0,0,0.2)',
-            padding: '4px',
-            borderRadius: '14px',
-            border: '1px solid rgba(255,255,255,0.03)',
-            marginBottom: '1.5rem'
-          }}>
-            {['Citizen', 'Staff', 'Admin'].map((tab) => {
-              const isSel = activeTab === tab;
-              const color = tab === 'Citizen' ? 'var(--color-primary)' : tab === 'Staff' ? 'var(--color-warning)' : 'var(--color-secondary)';
-              return (
-                <button
-                  key={tab}
-                  type="button"
-                  onClick={() => {
-                    setActiveTab(tab);
-                    setError('');
-                    setInfo('');
-                  }}
-                  style={{
-                    flex: 1,
-                    background: isSel ? color : 'none',
-                    color: isSel ? '#000' : 'var(--text-muted)',
-                    border: 'none',
-                    padding: '0.65rem 0.5rem',
-                    borderRadius: '10px',
-                    fontWeight: 700,
-                    fontSize: '0.8rem',
-                    cursor: 'pointer',
-                    transition: 'all 0.25s ease',
-                    boxShadow: isSel ? `0 4px 12px ${color}50` : 'none'
-                  }}
-                >
-                  {tab === 'Staff' ? 'Field Staff' : tab === 'Admin' ? 'Authority' : tab}
-                </button>
-              );
-            })}
-          </div>
-        )}
 
         {/* Portal Header Details */}
         <div style={{ textAlign: 'center', marginBottom: '1.75rem' }}>
@@ -830,26 +728,6 @@ const Login = () => {
               {otpLoading ? 'Authorizing...' : `Sign In to ${portal.title}`}
             </button>
 
-            {/* Google Login Option */}
-            <div style={{ margin: '1.25rem 0', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
-              <div style={{ flexGrow: 1, height: '1px', background: 'rgba(255,255,255,0.05)' }} />
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-dark)' }}>OR SECURE SIGN IN</span>
-              <div style={{ flexGrow: 1, height: '1px', background: 'rgba(255,255,255,0.05)' }} />
-            </div>
-
-            <div 
-              id="googleSignInDiv" 
-              style={{ 
-                width: '100%', 
-                display: 'flex', 
-                justifyContent: 'center',
-                minHeight: '40px',
-                borderRadius: '8px',
-                overflow: 'hidden'
-              }}
-            ></div>
-
-
             <div style={{ marginTop: '1.5rem', textAlign: 'center', fontSize: '0.85rem' }}>
               <span style={{ color: 'var(--text-muted)' }}>Need a new account?</span>{' '}
               <button
@@ -873,6 +751,49 @@ const Login = () => {
               </button>
             </div>
           </form>
+        )}
+
+        {/* Workspace Portal Selector - moved to the very bottom of the panel */}
+        {!forgotMode && (
+          <div style={{
+            display: 'flex',
+            background: 'rgba(0,0,0,0.2)',
+            padding: '4px',
+            borderRadius: '14px',
+            border: '1px solid rgba(255,255,255,0.03)',
+            marginTop: '1.5rem'
+          }}>
+            {['Citizen', 'Staff', 'Admin'].map((tab) => {
+              const isSel = activeTab === tab;
+              const color = tab === 'Citizen' ? 'var(--color-primary)' : tab === 'Staff' ? 'var(--color-warning)' : 'var(--color-secondary)';
+              return (
+                <button
+                  key={tab}
+                  type="button"
+                  onClick={() => {
+                    setActiveTab(tab);
+                    setError('');
+                    setInfo('');
+                  }}
+                  style={{
+                    flex: 1,
+                    background: isSel ? color : 'none',
+                    color: isSel ? '#000' : 'var(--text-muted)',
+                    border: 'none',
+                    padding: '0.65rem 0.5rem',
+                    borderRadius: '10px',
+                    fontWeight: 700,
+                    fontSize: '0.8rem',
+                    cursor: 'pointer',
+                    transition: 'all 0.25s ease',
+                    boxShadow: isSel ? `0 4px 12px ${color}50` : 'none'
+                  }}
+                >
+                  {tab === 'Staff' ? 'Field Staff' : tab === 'Admin' ? 'Authority' : tab}
+                </button>
+              );
+            })}
+          </div>
         )}
 
       </div>
