@@ -435,7 +435,7 @@ const Login = () => {
                       name="name"
                       value={formData.name}
                       onChange={handleChange}
-                      placeholder="Aarav Sharma"
+                      placeholder="Aarav"
                       className="form-control"
                       style={{ paddingLeft: '2.5rem' }}
                       required
