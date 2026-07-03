@@ -139,11 +139,11 @@ async function seedDefaultUsers() {
     const citizenExists = await User.findOne({ email: 'citizen@civicpulse.org' });
     if (!citizenExists) {
       await User.create({
-        name: 'Aarav Sharma (Citizen)',
+        name: 'Aarav (Citizen)',
         email: 'citizen@civicpulse.org',
         password: 'citizen123',
         role: 'Citizen',
-        mobile: '9876543212',
+        mobile: '9870543212',
         state: 'Bihar',
         district: 'Patna',
         city: 'Patna',
