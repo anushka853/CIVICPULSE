@@ -487,7 +487,7 @@ const Login = () => {
                       name="mobile"
                       value={formData.mobile}
                       onChange={handleChange}
-                      placeholder="9876543210"
+                      placeholder="9870543210"
                       className="form-control"
                       style={{ paddingLeft: '2.5rem' }}
                       required
