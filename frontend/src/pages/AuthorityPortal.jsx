@@ -14,7 +14,7 @@ import {
   User as UserIcon,
   DollarSign,
   Merge,
-  PieChart
+  ZoomIn
 } from 'lucide-react';
 
 const isVideoFile = (url) => {
@@ -34,7 +34,8 @@ const AuthorityPortal = () => {
     assignIssue, 
     mergeIssues, 
     analytics, 
-    fetchAnalytics 
+    fetchAnalytics,
+    getBackendUrl
   } = useContext(GlobalContext);
 
   const [selectedIssueId, setSelectedIssueId] = useState(null);
@@ -46,6 +47,20 @@ const AuthorityPortal = () => {
   const [verificationResult, setVerificationResult] = useState(null);
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+  const [zoomImage, setZoomImage] = useState(null);
+
+  // Address-based Staff Filtering States
+  const [staffFilters, setStaffFilters] = useState({
+    state: '',
+    district: '',
+    city: '',
+    village: '',
+    pinCode: '',
+    searchQuery: '',
+  });
+  const [aiRecommendation, setAiRecommendation] = useState(null);
+  const [recommendationLoading, setRecommendationLoading] = useState(false);
+
 
   const navigate = useNavigate();
 
@@ -68,7 +83,45 @@ const AuthorityPortal = () => {
     setSelectedStaffId('');
     setError('');
     setSuccessMsg('');
+    setAiRecommendation(null);
+    setStaffFilters({
+      state: '',
+      district: '',
+      city: '',
+      village: '',
+      pinCode: '',
+      searchQuery: '',
+    });
   };
+
+  const handleFetchRecommendation = async () => {
+    if (!selectedIssueId) return;
+    setRecommendationLoading(true);
+    setError('');
+    try {
+      const token = user?.token;
+      const baseUrl = window.location.origin.includes('localhost') || window.location.origin.includes('127.0.0.1')
+        ? 'http://localhost:5000/api'
+        : '/api';
+      const res = await fetch(`${baseUrl}/issues/${selectedIssueId}/recommend-staff`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Failed to fetch AI recommendation');
+      setAiRecommendation(data);
+      if (data.recommendedStaffId) {
+        setSelectedStaffId(data.recommendedStaffId);
+      }
+    } catch (err) {
+      console.error(err);
+      setError(err.message || 'Error fetching AI recommendation');
+    } finally {
+      setRecommendationLoading(false);
+    }
+  };
+
 
   const handleAssignSubmit = async (e) => {
     e.preventDefault();
@@ -175,14 +228,56 @@ const AuthorityPortal = () => {
     Math.abs(i.longitude - activeIssue.longitude) < 0.0015
   ) : [];
 
+  // Filter staff based on address fields
+  const filteredStaff = staffUsers.filter((staff) => {
+    const matchState = !staffFilters.state || (staff.state && staff.state.toLowerCase().includes(staffFilters.state.toLowerCase()));
+    const matchDistrict = !staffFilters.district || (staff.district && staff.district.toLowerCase().includes(staffFilters.district.toLowerCase()));
+    const matchCity = !staffFilters.city || (staff.city && staff.city.toLowerCase().includes(staffFilters.city.toLowerCase()));
+    const matchVillage = !staffFilters.village || (staff.village && staff.village.toLowerCase().includes(staffFilters.village.toLowerCase()));
+    const matchPinCode = !staffFilters.pinCode || (staff.pinCode && staff.pinCode.includes(staffFilters.pinCode));
+    const matchQuery = !staffFilters.searchQuery || 
+      staff.name.toLowerCase().includes(staffFilters.searchQuery.toLowerCase()) || 
+      staff.email.toLowerCase().includes(staffFilters.searchQuery.toLowerCase());
+    
+    return matchState && matchDistrict && matchCity && matchVillage && matchPinCode && matchQuery;
+  });
+
   // Budget details
   const totalIncurredCost = analytics?.summary?.totalCost || 0;
   const budgetLimit = 100000; // Mock Budget
   const budgetPercent = Math.min((totalIncurredCost / budgetLimit) * 100, 100);
 
+
   return (
     <div>
       <Navbar title="Authority Portal & Budget Planner" />
+
+      {/* LIGHTBOX ZOOM MODAL */}
+      {zoomImage && (
+        <div 
+          onClick={() => setZoomImage(null)}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0,0,0,0.92)',
+            zIndex: 9999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'zoom-out',
+            padding: '2rem'
+          }}
+        >
+          <img 
+            src={zoomImage} 
+            alt="Zoomed view" 
+            style={{ maxWidth: '95%', maxHeight: '95%', objectFit: 'contain', borderRadius: '8px', boxShadow: '0 20px 50px rgba(0,0,0,0.6)' }} 
+          />
+        </div>
+      )}
 
       <div className="fade-in" style={{ marginTop: '1rem' }}>
         
@@ -350,12 +445,12 @@ const AuthorityPortal = () => {
                     </div>
                     
                     <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: '1.4' }}>
-                      {verificationResult.aiAnalysis?.details}
+                      {verificationResult.aiAnalysis?.details || verificationResult.issue?.aiResolutionDetails}
                     </p>
 
                     <div style={{ display: 'flex', gap: '0.75rem', background: 'rgba(255,255,255,0.02)', padding: '0.5rem', borderRadius: '8px', fontSize: '0.75rem' }}>
+                      <div>Verdict Result: <strong style={{ color: 'var(--color-secondary)' }}>{verificationResult.issue?.aiResolutionResult || 'Cleaned'}</strong></div>
                       <div>Confidence Score: <strong style={{ color: 'var(--color-secondary)' }}>{verificationResult.aiAnalysis?.confidence || verificationResult.issue?.aiResolutionConfidence}%</strong></div>
-                      <div>Status: <strong style={{ color: 'var(--color-secondary)' }}>RESOLVED</strong></div>
                     </div>
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', color: 'var(--color-warning)', fontSize: '0.75rem', fontWeight: 'bold', borderTop: '1px solid rgba(16,185,129,0.1)', paddingTop: '0.5rem' }}>
@@ -379,15 +474,16 @@ const AuthorityPortal = () => {
                         <span style={{ fontSize: '0.75rem', color: 'var(--text-dark)', display: 'block', marginBottom: '4px' }}>Original Issue</span>
                         {isVideoFile(activeIssue.image) ? (
                           <video 
-                            src={activeIssue.image.startsWith('/') ? `http://localhost:5000${activeIssue.image}` : activeIssue.image} 
+                            src={getBackendUrl(activeIssue.image)} 
                             controls
                             style={{ width: '100%', height: '110px', objectFit: 'cover', borderRadius: '8px', border: '1px solid var(--border-color)' }}
                           />
                         ) : (
                           <img 
-                            src={activeIssue.image.startsWith('/') ? `http://localhost:5000${activeIssue.image}` : activeIssue.image} 
+                            src={getBackendUrl(activeIssue.image)} 
                             alt="Original" 
-                            style={{ width: '100%', height: '110px', objectFit: 'cover', borderRadius: '8px', border: '1px solid var(--border-color)' }}
+                            onClick={() => setZoomImage(getBackendUrl(activeIssue.image))}
+                            style={{ width: '100%', height: '110px', objectFit: 'cover', borderRadius: '8px', border: '1px solid var(--border-color)', cursor: 'zoom-in' }}
                             onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1594818868299-19c22221b0f3?auto=format&fit=crop&q=60&w=300'; }}
                           />
                         )}
@@ -397,9 +493,10 @@ const AuthorityPortal = () => {
                         <span style={{ fontSize: '0.75rem', color: 'var(--text-dark)', display: 'block', marginBottom: '4px' }}>Resolution Proof</span>
                         {activeIssue.resolutionImage || resolutionPreview ? (
                           <img 
-                            src={resolutionPreview || (activeIssue.resolutionImage.startsWith('/') ? `http://localhost:5000${activeIssue.resolutionImage}` : activeIssue.resolutionImage)} 
+                            src={resolutionPreview || getBackendUrl(activeIssue.resolutionImage)} 
                             alt="Resolution" 
-                            style={{ width: '100%', height: '110px', objectFit: 'cover', borderRadius: '8px', border: '1px solid var(--color-secondary)' }} 
+                            onClick={() => setZoomImage(resolutionPreview || getBackendUrl(activeIssue.resolutionImage))}
+                            style={{ width: '100%', height: '110px', objectFit: 'cover', borderRadius: '8px', border: '1px solid var(--color-secondary)', cursor: 'zoom-in' }} 
                           />
                         ) : (
                           <div style={{ width: '100%', height: '110px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.02)', border: '1px dashed var(--border-color)', borderRadius: '8px', color: 'var(--text-dark)', fontSize: '0.75rem' }}>
@@ -409,37 +506,221 @@ const AuthorityPortal = () => {
                       </div>
                     </div>
 
-                    {/* ASSIGNMENT FLOW FOR REPORTED/VERIFIED */}
+                    {/* ASSIGNMENT FLOW FOR REPORTED/VERIFIED WITH ADDRESS FILTERING AND AI RECOMMENDATION */}
                     {(activeIssue.status === 'Reported' || activeIssue.status === 'Verified') && (
-                      <form onSubmit={handleAssignSubmit} style={{ borderTop: '1px solid var(--border-color)', paddingTop: '1rem' }}>
-                        <div className="form-group">
-                          <label className="form-label">Assign Field Worker (Working Staff)</label>
-                          <div style={{ display: 'flex', gap: '0.5rem' }}>
-                            <select 
-                              value={selectedStaffId} 
-                              onChange={(e) => setSelectedStaffId(e.target.value)} 
-                              className="form-control"
-                              style={{ flexGrow: 1 }}
+                      <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                        <div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                            <label className="form-label" style={{ margin: 0 }}>Filter Available Staff by Complaint Address</label>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setStaffFilters({
+                                  state: activeIssue.state || '',
+                                  district: activeIssue.district || '',
+                                  city: activeIssue.city || '',
+                                  village: activeIssue.village || '',
+                                  pinCode: activeIssue.pinCode || '',
+                                  searchQuery: ''
+                                });
+                              }}
+                              style={{
+                                background: 'rgba(16, 185, 129, 0.1)',
+                                border: '1px solid rgba(16, 185, 129, 0.2)',
+                                color: 'var(--color-secondary)',
+                                padding: '4px 8px',
+                                borderRadius: '6px',
+                                fontSize: '0.75rem',
+                                cursor: 'pointer',
+                                fontWeight: 'bold'
+                              }}
                             >
-                              <option value="">-- Choose Staff Member --</option>
-                              {staffUsers.map((staff) => (
-                                <option key={staff._id} value={staff._id}>
-                                  {staff.name} (LVL {staff.level})
-                                </option>
-                              ))}
-                            </select>
-                            
-                            <button 
-                              type="submit" 
-                              disabled={processing}
-                              className="btn btn-primary"
-                              style={{ width: 'auto', padding: '0.5rem 1rem' }}
-                            >
-                              {processing ? 'Assigning...' : 'Assign'}
+                              Autofill Address Filters
                             </button>
                           </div>
+                          
+                          <div className="grid-2" style={{ gap: '0.5rem', marginBottom: '0.5rem' }}>
+                            <input
+                              type="text"
+                              placeholder="State"
+                              value={staffFilters.state}
+                              onChange={(e) => setStaffFilters({ ...staffFilters, state: e.target.value })}
+                              className="form-control"
+                              style={{ padding: '6px 12px', fontSize: '0.8rem' }}
+                            />
+                            <input
+                              type="text"
+                              placeholder="District"
+                              value={staffFilters.district}
+                              onChange={(e) => setStaffFilters({ ...staffFilters, district: e.target.value })}
+                              className="form-control"
+                              style={{ padding: '6px 12px', fontSize: '0.8rem' }}
+                            />
+                          </div>
+                          <div className="grid-2" style={{ gap: '0.5rem', marginBottom: '0.5rem' }}>
+                            <input
+                              type="text"
+                              placeholder="City/Town"
+                              value={staffFilters.city}
+                              onChange={(e) => setStaffFilters({ ...staffFilters, city: e.target.value })}
+                              className="form-control"
+                              style={{ padding: '6px 12px', fontSize: '0.8rem' }}
+                            />
+                            <input
+                              type="text"
+                              placeholder="Village/Ward"
+                              value={staffFilters.village}
+                              onChange={(e) => setStaffFilters({ ...staffFilters, village: e.target.value })}
+                              className="form-control"
+                              style={{ padding: '6px 12px', fontSize: '0.8rem' }}
+                            />
+                          </div>
+                          <div className="grid-2" style={{ gap: '0.5rem' }}>
+                            <input
+                              type="text"
+                              placeholder="PIN Code"
+                              value={staffFilters.pinCode}
+                              onChange={(e) => setStaffFilters({ ...staffFilters, pinCode: e.target.value })}
+                              className="form-control"
+                              style={{ padding: '6px 12px', fontSize: '0.8rem' }}
+                            />
+                            <input
+                              type="text"
+                              placeholder="Search Staff Name/Email..."
+                              value={staffFilters.searchQuery}
+                              onChange={(e) => setStaffFilters({ ...staffFilters, searchQuery: e.target.value })}
+                              className="form-control"
+                              style={{ padding: '6px 12px', fontSize: '0.8rem' }}
+                            />
+                          </div>
                         </div>
-                      </form>
+
+                        {/* Ask Gemini AI Dispatcher Recommendation */}
+                        <div style={{
+                          background: 'rgba(99, 102, 241, 0.06)',
+                          border: '1px dashed rgba(99, 102, 241, 0.3)',
+                          borderRadius: '12px',
+                          padding: '0.85rem'
+                        }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontSize: '0.8rem', color: '#cbd5e1', fontWeight: 600 }}>Gemini AI Proximity Dispatcher</span>
+                            <button
+                              type="button"
+                              onClick={handleFetchRecommendation}
+                              disabled={recommendationLoading}
+                              style={{
+                                background: 'linear-gradient(135deg, #6366f1, #a855f7)',
+                                color: '#white',
+                                border: 'none',
+                                padding: '6px 12px',
+                                borderRadius: '8px',
+                                fontSize: '0.75rem',
+                                fontWeight: 'bold',
+                                cursor: 'pointer',
+                                boxShadow: '0 4px 12px rgba(99, 102, 241, 0.3)'
+                              }}
+                            >
+                              {recommendationLoading ? 'Analyzing...' : 'Ask AI to Recommend'}
+                            </button>
+                          </div>
+
+                          {aiRecommendation && (
+                            <div style={{ marginTop: '0.75rem', fontSize: '0.8rem', color: '#94a3b8', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '0.5rem' }}>
+                              <div>AI Selected: <strong style={{ color: 'var(--color-primary)' }}>{aiRecommendation.name}</strong></div>
+                              <p style={{ marginTop: '0.25rem', fontStyle: 'italic', fontSize: '0.75rem', lineHeight: '1.3' }}>
+                                {aiRecommendation.reason}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Staff Cards matching criteria */}
+                        <div>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-dark)', display: 'block', marginBottom: '0.5rem' }}>
+                            Matching Staff Members ({filteredStaff.length})
+                          </span>
+                          
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '180px', overflowY: 'auto', paddingRight: '4px' }}>
+                            {filteredStaff.map((staff) => {
+                              const isSelected = selectedStaffId === staff._id;
+                              const isAreaMatch = (
+                                (staff.village && activeIssue.village && staff.village.toLowerCase() === activeIssue.village.toLowerCase()) ||
+                                (staff.city && activeIssue.city && staff.city.toLowerCase() === activeIssue.city.toLowerCase()) ||
+                                (staff.district && activeIssue.district && staff.district.toLowerCase() === activeIssue.district.toLowerCase()) ||
+                                (staff.pinCode && activeIssue.pinCode && staff.pinCode === activeIssue.pinCode)
+                              );
+                              
+                              return (
+                                <div
+                                  key={staff._id}
+                                  onClick={() => setSelectedStaffId(staff._id)}
+                                  style={{
+                                    padding: '0.65rem 0.85rem',
+                                    background: isSelected ? 'rgba(16, 185, 129, 0.08)' : 'rgba(255, 255, 255, 0.01)',
+                                    border: `1px solid ${isSelected ? 'var(--color-secondary)' : 'var(--border-color)'}`,
+                                    borderRadius: '10px',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                    transition: 'all 0.2s ease'
+                                  }}
+                                >
+                                  <div>
+                                    <div style={{ fontSize: '0.85rem', fontWeight: 'bold', color: '#fff', display: 'flex', gap: '4px', alignItems: 'center' }}>
+                                      <span>{staff.name}</span>
+                                      {isAreaMatch && <span style={{ fontSize: '0.65rem', background: 'rgba(16, 185, 129, 0.15)', color: 'var(--color-secondary)', padding: '1px 6px', borderRadius: '4px' }}>Proximity Match</span>}
+                                    </div>
+                                    <span style={{ fontSize: '0.7rem', color: 'var(--text-dark)' }}>
+                                      {staff.village || 'No Ward'}, {staff.city || 'No City'}, {staff.district || 'No District'} ({staff.pinCode || 'No PIN'})
+                                    </span>
+                                  </div>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                    <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>LVL {staff.level || 1}</span>
+                                    <div style={{
+                                      width: '16px',
+                                      height: '16px',
+                                      borderRadius: '50%',
+                                      border: `2px solid ${isSelected ? 'var(--color-secondary)' : 'var(--border-color)'}`,
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      background: isSelected ? 'var(--color-secondary)' : 'none'
+                                    }}>
+                                      {isSelected && <Check size={10} color="#000" />}
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+
+                            {filteredStaff.length === 0 && (
+                              <div style={{
+                                background: 'rgba(239, 68, 68, 0.05)',
+                                border: '1px dashed rgba(239, 68, 68, 0.2)',
+                                color: 'var(--color-danger)',
+                                padding: '0.75rem',
+                                borderRadius: '10px',
+                                fontSize: '0.75rem',
+                                textAlign: 'center'
+                              }}>
+                                ⚠️ No employees available at this address/filters. Please clear address filters to view all workers.
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        <form onSubmit={handleAssignSubmit}>
+                          <button
+                            type="submit"
+                            disabled={processing || !selectedStaffId}
+                            className="btn btn-primary"
+                            style={{ width: '100%', padding: '0.75rem', background: 'var(--color-secondary)', color: '#000' }}
+                          >
+                            {processing ? 'Allocating...' : 'Allocate Work to Selected Employee'}
+                          </button>
+                        </form>
+                      </div>
                     )}
 
                     {/* IN PROGRESS STATUS REPORT */}

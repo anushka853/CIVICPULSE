@@ -355,17 +355,71 @@ h1, h2, h3, h4, h5, h6 {
   gap: 1.5rem;
 }
 
+/* Mobile Responsive Overrides */
+.mobile-menu-toggle-btn {
+  display: none !important;
+}
+
+.mobile-close-btn {
+  display: none !important;
+}
+
 @media (max-width: 992px) {
   .grid-2, .grid-3 {
     grid-template-columns: 1fr;
+    gap: 1rem;
   }
+  
   .main-content {
-    margin-left: 0;
+    margin-left: 0 !important;
+    padding: 1rem !important;
   }
-  .sidebar {
-    display: none; /* simple responsive fallback */
-  }
+  
   .top-header {
-    left: 0;
+    left: 0 !important;
+    padding: 0 1rem !important;
+  }
+  
+  .mobile-menu-toggle-btn {
+    display: inline-flex !important;
+  }
+  
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: -280px !important;
+    width: var(--sidebar-width);
+    height: 100vh;
+    background: #0d121f !important;
+    transition: left var(--transition-speed) cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 1010; /* Above overlays */
+  }
+  
+  .sidebar.mobile-open {
+    left: 0 !important;
+  }
+  
+  .mobile-close-btn {
+    display: inline-flex !important;
+  }
+
+  .leaflet-container {
+    height: 320px !important;
+  }
+
+  .btn {
+    padding: 0.85rem 1rem !important;
+    font-size: 0.9rem !important;
+  }
+
+  /* Responsive table lists */
+  .responsive-table {
+    display: block;
+    width: 100%;
+    overflow-x: auto;
+  }
+
+  select.form-control, input.form-control {
+    font-size: 16px !important; /* Prevents auto-zoom on mobile safari/chrome */
   }
 }

@@ -12,6 +12,7 @@ import {
   assignIssue,
   mergeIssues,
   getActivities,
+  recommendStaff,
 } from '../controllers/issueController.js';
 import { protect, admin } from '../middleware/authMiddleware.js';
 import upload from '../middleware/uploadMiddleware.js';
@@ -31,5 +32,6 @@ router.put('/:id/check-in', protect, checkInStaff);
 router.put('/:id/complete', protect, upload.single('resolutionImage'), completeStaffIssue);
 router.put('/:id/assign', protect, admin, assignIssue);
 router.post('/:id/merge', protect, admin, mergeIssues);
+router.get('/:id/recommend-staff', protect, admin, recommendStaff);
 
 export default router;

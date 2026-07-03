@@ -11,7 +11,8 @@ import {
   Loader2, 
   Compass, 
   Clock, 
-  Check 
+  Check,
+  ZoomIn
 } from 'lucide-react';
 
 const isVideoFile = (url) => {
@@ -21,13 +22,22 @@ const isVideoFile = (url) => {
 };
 
 const StaffPortal = () => {
-  const { issues, fetchIssues, checkInStaff, completeStaffIssue, user } = useContext(GlobalContext);
+  const { 
+    issues, 
+    fetchIssues, 
+    checkInStaff, 
+    completeStaffIssue, 
+    user, 
+    getBackendUrl 
+  } = useContext(GlobalContext);
+
   const [selectedIssueId, setSelectedIssueId] = useState(null);
   const [resolutionFile, setResolutionFile] = useState(null);
   const [resolutionPreview, setResolutionPreview] = useState('');
   const [checkingIn, setCheckingIn] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState({ text: '', type: '' });
+  const [zoomImage, setZoomImage] = useState(null);
 
   useEffect(() => {
     fetchIssues();
@@ -106,6 +116,33 @@ const StaffPortal = () => {
   return (
     <div>
       <Navbar title="Working Staff Taskboard" />
+
+      {/* LIGHTBOX ZOOM MODAL */}
+      {zoomImage && (
+        <div 
+          onClick={() => setZoomImage(null)}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0,0,0,0.92)',
+            zIndex: 9999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'zoom-out',
+            padding: '2rem'
+          }}
+        >
+          <img 
+            src={zoomImage} 
+            alt="Zoomed view" 
+            style={{ maxWidth: '95%', maxHeight: '95%', objectFit: 'contain', borderRadius: '8px', boxShadow: '0 20px 50px rgba(0,0,0,0.6)' }} 
+          />
+        </div>
+      )}
 
       <div className="fade-in" style={{ marginTop: '1rem' }}>
         
@@ -201,6 +238,32 @@ const StaffPortal = () => {
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                   
+                  {/* Original Reported Image reference */}
+                  <div style={{ background: 'rgba(255,255,255,0.01)', padding: '1rem', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                      <span style={{ fontSize: '0.8rem', color: 'var(--color-primary)', fontWeight: 'bold' }}>ORIGINAL BEFORE PROOF</span>
+                      <button
+                        type="button"
+                        onClick={() => setZoomImage(getBackendUrl(activeIssue.image))}
+                        style={{ background: 'none', border: 'none', color: 'var(--color-primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '2px', fontSize: '0.75rem' }}
+                      >
+                        <ZoomIn size={12} />
+                        <span>Zoom</span>
+                      </button>
+                    </div>
+                    {isVideoFile(activeIssue.image) ? (
+                      <video src={getBackendUrl(activeIssue.image)} controls style={{ width: '100%', height: '140px', objectFit: 'cover', borderRadius: '8px' }} />
+                    ) : (
+                      <img 
+                        src={getBackendUrl(activeIssue.image)} 
+                        alt="Before" 
+                        onClick={() => setZoomImage(getBackendUrl(activeIssue.image))}
+                        style={{ width: '100%', height: '140px', objectFit: 'cover', borderRadius: '8px', cursor: 'zoom-in' }} 
+                        onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1594818868299-19c22221b0f3?auto=format&fit=crop&q=60&w=300'; }}
+                      />
+                    )}
+                  </div>
+
                   {/* Location & Map details */}
                   <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', background: 'rgba(255,255,255,0.02)', padding: '0.85rem', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
                     <MapPin size={28} color="var(--color-primary)" style={{ flexShrink: 0 }} />
@@ -257,7 +320,7 @@ const StaffPortal = () => {
                           <CheckCircle size={32} color="var(--color-secondary)" style={{ margin: '0 auto' }} />
                           <h4 style={{ fontSize: '0.9rem', color: '#fff' }}>Proof Submitted Successfully</h4>
                           <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                            Awaiting double-blind AI verification comparison and final sign-off from Municipal Administrator.
+                            Awaiting verification comparison audit and final sign-off from Municipal Administrator.
                           </p>
                         </div>
                       ) : (

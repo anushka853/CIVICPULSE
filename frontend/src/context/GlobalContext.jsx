@@ -1,8 +1,12 @@
 import React, { createContext, useState, useEffect } from 'react';
+import { io } from 'socket.io-client';
+
 
 export const GlobalContext = createContext();
 
-const API_BASE_URL = 'https://trash2task.onrender.com/api';
+const API_BASE_URL = window.location.origin.includes('localhost') || window.location.origin.includes('127.0.0.1')
+  ? 'http://localhost:5000/api'
+  : '/api';
 
 export const GlobalProvider = ({ children }) => {
   const [user, setUser] = useState(() => {
@@ -14,6 +18,21 @@ export const GlobalProvider = ({ children }) => {
   const [analytics, setAnalytics] = useState(null);
   const [activities, setActivities] = useState([]);
   const [staffUsers, setStaffUsers] = useState([]);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [toast, setToast] = useState(null);
+
+  const showToast = (message, type = 'info') => {
+    setToast({ message, type });
+  };
+
+
+  // Resolve dynamic host URL for static uploads
+  const getBackendUrl = (path) => {
+    if (!path) return '';
+    if (path.startsWith('http')) return path;
+    const base = API_BASE_URL.replace('/api', '');
+    return `${base}${path}`;
+  };
 
   // Set auth header token helper
   const getAuthHeaders = () => {
@@ -39,7 +58,7 @@ export const GlobalProvider = ({ children }) => {
       
       setUser(data);
       localStorage.setItem('civicpulse_user', JSON.stringify(data));
-      return { success: true };
+      return { success: true, user: data };
     } catch (err) {
       console.error(err);
       return { success: false, error: err.message };
@@ -49,13 +68,17 @@ export const GlobalProvider = ({ children }) => {
   };
 
   // Register action
-  const signup = async (name, email, password, role = 'Citizen') => {
+  const signup = async (nameOrData, email, password, role = 'Citizen') => {
     setLoading(true);
     try {
+      const bodyPayload = typeof nameOrData === 'object'
+        ? nameOrData
+        : { name: nameOrData, email, password, role };
+
       const res = await fetch(`${API_BASE_URL}/users/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, password, role }),
+        body: JSON.stringify(bodyPayload),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Registration failed');
@@ -68,6 +91,95 @@ export const GlobalProvider = ({ children }) => {
       return { success: false, error: err.message };
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Google Login action
+  const googleLogin = async (credential, role = 'Citizen') => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/users/google-login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ credential, role }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Google Login failed');
+
+      setUser(data);
+      localStorage.setItem('civicpulse_user', JSON.stringify(data));
+      return { success: true, user: data };
+    } catch (err) {
+      console.error(err);
+      return { success: false, error: err.message };
+    } finally {
+      setLoading(false);
+    }
+  };
+
+
+  // OTP and password reset actions
+  const sendOtp = async (email, purpose) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/users/send-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, purpose }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Failed to send OTP');
+      return { success: true, devOtp: data.devOtp };
+    } catch (err) {
+      console.error(err);
+      return { success: false, error: err.message };
+    }
+  };
+
+  const verifyOtp = async (email, otp, purpose) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/users/verify-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, otp, purpose }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'OTP verification failed');
+      return { success: true };
+    } catch (err) {
+      console.error(err);
+      return { success: false, error: err.message };
+    }
+  };
+
+  const submitForgotPassword = async (email) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/users/forgot-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Failed to send reset code');
+      return { success: true, devOtp: data.devOtp };
+    } catch (err) {
+      console.error(err);
+      return { success: false, error: err.message };
+    }
+  };
+
+  const submitResetPassword = async (email, otp, newPassword) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/users/reset-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, otp, newPassword }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Failed to reset password');
+      return { success: true };
+    } catch (err) {
+      console.error(err);
+      return { success: false, error: err.message };
     }
   };
 
@@ -373,6 +485,44 @@ export const GlobalProvider = ({ children }) => {
     }
   }, []);
 
+  // Socket.io Real-time connection setup
+  useEffect(() => {
+    if (user) {
+      const socketUrl = API_BASE_URL.replace('/api', '');
+      console.log('[Socket] Connecting to:', socketUrl);
+      const socket = io(socketUrl, {
+        transports: ['websocket', 'polling']
+      });
+
+      socket.on('connect', () => {
+        console.log('[Socket] Connected successfully with ID:', socket.id);
+        socket.emit('register', user._id);
+      });
+
+      socket.on('connect_error', (error) => {
+        console.error('[Socket] Connection error:', error);
+      });
+
+      socket.on('notification', (notification) => {
+        console.log('[Socket] Received notification:', notification);
+        showToast(notification.text, notification.type || 'info');
+        fetchActivities();
+      });
+
+      socket.on('system-notification', (notification) => {
+        console.log('[Socket] Received system-notification:', notification);
+        showToast(notification.text, 'system');
+        fetchActivities();
+      });
+
+      return () => {
+        console.log('[Socket] Disconnecting socket...');
+        socket.disconnect();
+      };
+    }
+  }, [user]);
+
+
   return (
     <GlobalContext.Provider
       value={{
@@ -400,6 +550,17 @@ export const GlobalProvider = ({ children }) => {
         mergeIssues,
         staffUsers,
         fetchStaffUsers,
+        getBackendUrl,
+        sendOtp,
+        verifyOtp,
+        submitForgotPassword,
+        submitResetPassword,
+        mobileSidebarOpen,
+        setMobileSidebarOpen,
+        toast,
+        setToast,
+        showToast,
+        googleLogin,
       }}
     >
       {children}

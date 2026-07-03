@@ -1,13 +1,30 @@
 import React, { useContext } from 'react';
 import { GlobalContext } from '../context/GlobalContext';
-import { ShieldCheck, User as UserIcon } from 'lucide-react';
+import { ShieldCheck, Menu } from 'lucide-react';
 
 const Navbar = ({ title }) => {
-  const { user } = useContext(GlobalContext);
+  const { user, mobileSidebarOpen, setMobileSidebarOpen } = useContext(GlobalContext);
 
   return (
     <header className="top-header">
-      <h2 style={{ fontSize: '1.4rem', color: '#fff' }}>{title || 'Dashboard'}</h2>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+        <button
+          className="mobile-menu-toggle-btn"
+          onClick={() => setMobileSidebarOpen(!mobileSidebarOpen)}
+          style={{
+            background: 'none',
+            border: 'none',
+            color: '#fff',
+            cursor: 'pointer',
+            padding: '4px',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}
+        >
+          <Menu size={24} />
+        </button>
+        <h2 style={{ fontSize: '1.4rem', color: '#fff', margin: 0 }}>{title || 'Dashboard'}</h2>
+      </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
         {user ? (

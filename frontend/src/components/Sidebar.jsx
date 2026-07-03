@@ -15,7 +15,15 @@ import {
 } from 'lucide-react';
 
 const Sidebar = () => {
-  const { user, logout, activities, fetchActivities } = useContext(GlobalContext);
+  const { 
+    user, 
+    logout, 
+    activities, 
+    fetchActivities, 
+    mobileSidebarOpen, 
+    setMobileSidebarOpen 
+  } = useContext(GlobalContext);
+
   const [showNotifications, setShowNotifications] = useState(false);
   const location = useLocation();
 
@@ -37,53 +45,94 @@ const Sidebar = () => {
     setShowNotifications(true);
   };
 
+  const handleLinkClick = () => {
+    setMobileSidebarOpen(false);
+  };
+
   // Calculate percentage to next level (each level is 50 XP)
   const currentLevelXp = user ? user.points % 50 : 0;
   const xpPercent = Math.min((currentLevelXp / 50) * 100, 100);
 
   return (
     <>
-      <aside className="sidebar">
+      {/* Mobile Drawer backdrop overlay */}
+      {mobileSidebarOpen && (
+        <div 
+          onClick={() => setMobileSidebarOpen(false)}
+          className="mobile-sidebar-backdrop"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0, 0, 0, 0.65)',
+            backdropFilter: 'blur(3px)',
+            zIndex: 1000
+          }}
+        />
+      )}
+
+      <aside className={`sidebar ${mobileSidebarOpen ? 'mobile-open' : ''}`}>
         <div className="logo-container" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <div className="logo-icon">C</div>
             <h1 className="logo-text">CivicPulse</h1>
           </div>
-          {user && (
-            <button 
-              onClick={handleOpenNotifications}
+          
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            {user && (
+              <button 
+                onClick={handleOpenNotifications}
+                style={{
+                  background: 'rgba(255,255,255,0.03)',
+                  border: '1px solid var(--border-color)',
+                  padding: '0.5rem',
+                  borderRadius: '8px',
+                  color: '#fff',
+                  cursor: 'pointer',
+                  position: 'relative',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transition: 'all 0.2s'
+                }}
+                title="Notifications"
+              >
+                <Bell size={16} />
+                <span style={{
+                  position: 'absolute',
+                  top: '-4px',
+                  right: '-4px',
+                  background: 'var(--color-danger)',
+                  width: '8px',
+                  height: '8px',
+                  borderRadius: '50%'
+                }}></span>
+              </button>
+            )}
+
+            {/* Mobile close sidebar button */}
+            <button
+              className="mobile-close-btn"
+              onClick={() => setMobileSidebarOpen(false)}
               style={{
                 background: 'rgba(255,255,255,0.03)',
                 border: '1px solid var(--border-color)',
-                padding: '0.5rem',
                 borderRadius: '8px',
-                color: '#fff',
+                padding: '0.5rem',
+                color: 'var(--text-muted)',
                 cursor: 'pointer',
-                position: 'relative',
-                display: 'flex',
+                display: 'none', // Overridden in media query
                 alignItems: 'center',
-                justifyContent: 'center',
-                transition: 'all 0.2s'
+                justifyContent: 'center'
               }}
-              title="Notifications"
             >
-              <Bell size={16} />
-              <span style={{
-                position: 'absolute',
-                top: '-4px',
-                right: '-4px',
-                background: 'var(--color-danger)',
-                width: '8px',
-                height: '8px',
-                borderRadius: '50%'
-              }}></span>
+              <X size={16} />
             </button>
-          )}
+          </div>
         </div>
 
         {user ? (
           <ul className="nav-links">
-            <li className={`nav-item ${isActive('/') ? 'active' : ''}`}>
+            <li className={`nav-item ${isActive('/') ? 'active' : ''}`} onClick={handleLinkClick}>
               <Link to="/">
                 <LayoutDashboard />
                 <span>Dashboard</span>
@@ -91,7 +140,7 @@ const Sidebar = () => {
             </li>
             
             {user.role === 'Citizen' && (
-              <li className={`nav-item ${isActive('/report') ? 'active' : ''}`}>
+              <li className={`nav-item ${isActive('/report') ? 'active' : ''}`} onClick={handleLinkClick}>
                 <Link to="/report">
                   <PlusCircle />
                   <span>Report Issue</span>
@@ -100,7 +149,7 @@ const Sidebar = () => {
             )}
 
             {user.role === 'Staff' && (
-              <li className={`nav-item ${isActive('/staff') ? 'active' : ''}`}>
+              <li className={`nav-item ${isActive('/staff') ? 'active' : ''}`} onClick={handleLinkClick}>
                 <Link to="/staff">
                   <Briefcase size={20} />
                   <span>Staff Portal</span>
@@ -109,7 +158,7 @@ const Sidebar = () => {
             )}
 
             {user.role === 'Admin' && (
-              <li className={`nav-item ${isActive('/admin') ? 'active' : ''}`}>
+              <li className={`nav-item ${isActive('/admin') ? 'active' : ''}`} onClick={handleLinkClick}>
                 <Link to="/admin">
                   <ShieldAlert />
                   <span>Authority Portal</span>
@@ -117,7 +166,7 @@ const Sidebar = () => {
               </li>
             )}
 
-            <li className={`nav-item ${isActive('/leaderboard') ? 'active' : ''}`}>
+            <li className={`nav-item ${isActive('/leaderboard') ? 'active' : ''}`} onClick={handleLinkClick}>
               <Link to="/leaderboard">
                 <Trophy />
                 <span>Leaderboard</span>
@@ -185,7 +234,10 @@ const Sidebar = () => {
             )}
 
             <button 
-              onClick={logout} 
+              onClick={() => {
+                logout();
+                handleLinkClick();
+              }} 
               className="btn btn-secondary" 
               style={{ width: '100%', padding: '0.5rem', marginTop: '1rem', fontSize: '0.8rem', height: 'auto', borderRadius: '8px' }}
             >

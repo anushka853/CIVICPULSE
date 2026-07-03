@@ -42,6 +42,42 @@ const userSchema = new mongoose.Schema(
       type: [String],
       default: [], // Badges like 'Spotter', 'Eco Warrior', etc.
     },
+    mobile: {
+      type: String,
+    },
+    state: {
+      type: String,
+    },
+    district: {
+      type: String,
+    },
+    city: {
+      type: String,
+    },
+    village: {
+      type: String,
+    },
+    pinCode: {
+      type: String,
+    },
+    serviceArea: {
+      type: String,
+    },
+    workingRadius: {
+      type: Number,
+      default: 5,
+    },
+    isVerified: {
+      type: Boolean,
+      default: false,
+    },
+    googleEmail: {
+      type: String,
+      lowercase: true,
+    },
+    googleId: {
+      type: String,
+    },
   },
   {
     timestamps: true,

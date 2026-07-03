@@ -12,7 +12,8 @@ import {
   Info,
   ShieldCheck,
   Mic,
-  MicOff
+  MicOff,
+  UploadCloud
 } from 'lucide-react';
 
 const ReportIssue = () => {
@@ -20,16 +21,26 @@ const ReportIssue = () => {
   const [step, setStep] = useState(1);
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState('');
+  const [imageFiles, setImageFiles] = useState([]);
+  const [imagePreviews, setImagePreviews] = useState([]);
   const [fileType, setFileType] = useState('image'); // 'image' or 'video'
   
   const [aiAnalyzing, setAiAnalyzing] = useState(false);
+  const [geocodingLoading, setGeocodingLoading] = useState(false);
+  
   const [formData, setFormData] = useState({
     title: '',
     description: '',
     category: 'Waste Management',
     image: '',
+    images: [],
     latitude: 12.9716, // Default Bangalore coords
     longitude: 77.5946,
+    state: '',
+    district: '',
+    city: '',
+    village: '',
+    landmark: '',
     severity: 'Medium',
     safetySuggestions: '',
   });
@@ -40,32 +51,91 @@ const ReportIssue = () => {
   const navigate = useNavigate();
 
   const startVoiceSimulation = () => {
-    setIsListening(true);
-    setTimeout(() => {
-      setIsListening(false);
-      let text = '';
+    setSubmitError('');
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      setIsListening(true);
+      setTimeout(() => {
+        setIsListening(false);
+        let text = '';
+        if (voiceLang === 'English') {
+          text = 'There is a large garbage pile blocking the corner pavement, creating a bad smell and health hazard.';
+        } else if (voiceLang === 'Hindi') {
+          text = 'यहाँ सड़क के बीचों-बीच बहुत कचरा पड़ा है जिससे रास्ता ब्लॉक हो गया है, कृपया सफाई कराएं।';
+        } else if (voiceLang === 'Kannada') {
+          text = 'ರಸ್ತೆಯ ಬದಿಯಲ್ಲಿ ಕಸದ ರಾಶಿ ಬಿದ್ದಿದ್ದು ಜನರಿಗೆ ಓಡಾಡಲು ತೊಂದರೆಯಾಗುತ್ತಿದೆ.';
+        }
+        setFormData(prev => ({
+          ...prev,
+          description: prev.description ? prev.description + ' ' + text : text
+        }));
+      }, 2000);
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.continuous = false;
+      
       if (voiceLang === 'English') {
-        text = 'There is a large garbage pile blocking the corner pavement, creating a bad smell and health hazard.';
+        recognition.lang = 'en-IN';
       } else if (voiceLang === 'Hindi') {
-        text = 'यहाँ सड़क के बीचों-बीच बहुत कचरा पड़ा है जिससे रास्ता ब्लॉक हो गया है, कृपया सफाई कराएं।';
+        recognition.lang = 'hi-IN';
       } else if (voiceLang === 'Kannada') {
-        text = 'ರಸ್ತೆಯ ಬದಿಯಲ್ಲಿ ಕಸದ ರಾಶಿ ಬಿದ್ದಿದ್ದು ಜನರಿಗೆ ಓಡಾಡಲು ತೊಂದರೆಯಾಗುತ್ತಿದೆ.';
+        recognition.lang = 'kn-IN';
       }
-      setFormData(prev => ({
-        ...prev,
-        description: prev.description ? prev.description + ' ' + text : text
-      }));
-    }, 3000);
+
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+
+      recognition.onstart = () => {
+        setIsListening(true);
+      };
+
+      recognition.onerror = (e) => {
+        console.warn('Speech recognition warning/error, triggering fallback:', e);
+        setIsListening(false);
+        let text = 'Speech recognition fell back. [Sample Hindi description]: यहाँ सड़क के बीचों-बीच बहुत कचरा पड़ा है।';
+        setFormData(prev => ({
+          ...prev,
+          description: prev.description ? prev.description + ' ' + text : text
+        }));
+      };
+
+      recognition.onend = () => {
+        setIsListening(false);
+      };
+
+      recognition.onresult = (event) => {
+        const speechToText = event.results[0][0].transcript;
+        if (speechToText) {
+          setFormData(prev => ({
+            ...prev,
+            description: prev.description ? prev.description + ' ' + speechToText : speechToText
+          }));
+        }
+      };
+
+      recognition.start();
+    } catch (err) {
+      console.warn('SpeechRecognition block, fallback applied:', err);
+      setIsListening(false);
+    }
   };
 
-  // Step 1: Handle media selection
+  // Handle multiple media selection
   const handleImageChange = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+    const files = Array.from(e.target.files);
+    if (files.length === 0) return;
 
-    setImageFile(file);
-    setImagePreview(URL.createObjectURL(file));
-    setFileType(file.type.startsWith('video/') ? 'video' : 'image');
+    setImageFile(files[0]); // Primary file for AI
+    setImageFiles(files);
+
+    const previews = files.map(file => URL.createObjectURL(file));
+    setImagePreview(previews[0]);
+    setImagePreviews(previews);
+
+    setFileType(files[0].type.startsWith('video/') ? 'video' : 'image');
     setSubmitError('');
     setVoiceBlob(null);
     setVoiceUrl('');
@@ -122,6 +192,37 @@ const ReportIssue = () => {
     }
   };
 
+  // Reverse Geocoding with Nominatim API
+  const reverseGeocode = async (lat, lng) => {
+    setGeocodingLoading(true);
+    try {
+      const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`);
+      if (response.ok) {
+        const data = await response.json();
+        const address = data.address || {};
+        
+        const resolvedState = address.state || '';
+        const resolvedDistrict = address.state_district || address.county || '';
+        const resolvedCity = address.city || address.town || address.suburb || address.village || '';
+        const resolvedVillage = address.village || address.neighbourhood || address.suburb || address.road || '';
+        const resolvedLandmark = address.road || address.amenity || address.shop || '';
+
+        setFormData(prev => ({
+          ...prev,
+          state: resolvedState,
+          district: resolvedDistrict,
+          city: resolvedCity,
+          village: resolvedVillage,
+          landmark: resolvedLandmark
+        }));
+      }
+    } catch (err) {
+      console.error('Reverse geocoding error:', err);
+    } finally {
+      setGeocodingLoading(false);
+    }
+  };
+
   // Execute multimodal analysis
   const executeAnalysis = async () => {
     if (!imageFile) return setSubmitError('Please select a photo or video first.');
@@ -146,12 +247,16 @@ const ReportIssue = () => {
         severity: result.analysis.severity || 'Medium',
         safetySuggestions: result.analysis.safetySuggestions || '',
         image: result.imageUrl,
+        images: [result.imageUrl]
       }));
+
+      // Trigger geocoding auto-fill for initial coordinates
+      await reverseGeocode(formData.latitude, formData.longitude);
 
       setStep(2);
     } catch (err) {
       console.error('Multimodal analysis failed:', err);
-      setSubmitError('AI analysis timed out or failed. You can still fill the details manually.');
+      setSubmitError('AI analysis failed. You can still fill the details manually.');
       setStep(2);
     } finally {
       setAiAnalyzing(false);
@@ -162,28 +267,52 @@ const ReportIssue = () => {
   const handleUseCurrentLocation = () => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
-        (position) => {
+        async (position) => {
           const { latitude, longitude } = position.coords;
+          const lat = Number(latitude.toFixed(6));
+          const lng = Number(longitude.toFixed(6));
+          
           setFormData(prev => ({
             ...prev,
-            latitude: Number(latitude.toFixed(6)),
-            longitude: Number(longitude.toFixed(6))
+            latitude: lat,
+            longitude: lng
           }));
+          setSubmitError('');
+
+          // Trigger geocoding
+          await reverseGeocode(lat, lng);
         },
-        (error) => {
-          console.error('Error fetching GPS coordinates:', error);
-          setSubmitError('Could not retrieve your location. Please check browser permissions.');
+        async (error) => {
+          console.warn('GPS location request blocked/denied, utilizing demo coordinates fallback:', error);
+          const fallbackLat = 25.5941;
+          const fallbackLng = 85.1376;
+          setFormData(prev => ({
+            ...prev,
+            latitude: fallbackLat,
+            longitude: fallbackLng
+          }));
+          setSubmitError('GPS access blocked. Applied Patna, Bihar demo coordinates fallback for automatic address detection.');
+          await reverseGeocode(fallbackLat, fallbackLng);
         },
-        { enableHighAccuracy: true }
+        { enableHighAccuracy: true, timeout: 5000 }
       );
     } else {
-      setSubmitError('Geolocation is not supported by your browser.');
+      const fallbackLat = 25.5941;
+      const fallbackLng = 85.1376;
+      setFormData(prev => ({
+        ...prev,
+        latitude: fallbackLat,
+        longitude: fallbackLng
+      }));
+      setSubmitError('GPS location not supported. Applied Patna, Bihar demo coordinates fallback.');
+      reverseGeocode(fallbackLat, fallbackLng);
     }
   };
 
   // Map coordinate selection callback
-  const handleLocationSelect = (lat, lng) => {
+  const handleLocationSelect = async (lat, lng) => {
     setFormData(prev => ({ ...prev, latitude: lat, longitude: lng }));
+    await reverseGeocode(lat, lng);
   };
 
   const handleInputChange = (e) => {
@@ -210,10 +339,10 @@ const ReportIssue = () => {
     <div>
       <Navbar title="Report Community Issue" />
 
-      <div className="fade-in" style={{ marginTop: '1rem', maxWidth: '800px', marginLine: 'auto' }}>
+      <div className="fade-in" style={{ marginTop: '1rem', maxWidth: '850px', marginInline: 'auto' }}>
         
         {/* Step indicator bar */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <div style={{
               width: '30px',
@@ -228,7 +357,7 @@ const ReportIssue = () => {
             }}>
               {step > 1 ? <Check size={16} /> : '1'}
             </div>
-            <span style={{ fontSize: '0.9rem', color: step >= 1 ? '#fff' : 'var(--text-muted)' }}>Upload Photo</span>
+            <span style={{ fontSize: '0.9rem', color: step >= 1 ? '#fff' : 'var(--text-muted)', fontWeight: 600 }}>Upload Media Proof</span>
           </div>
 
           <div style={{ flexGrow: 1, height: '1px', background: 'var(--border-color)', margin: '0 1rem' }}></div>
@@ -245,9 +374,9 @@ const ReportIssue = () => {
               justifyContent: 'center',
               fontWeight: 700
             }}>
-              '2'
+              2
             </div>
-            <span style={{ fontSize: '0.9rem', color: step >= 2 ? '#fff' : 'var(--text-muted)' }}>Review details & Geotag</span>
+            <span style={{ fontSize: '0.9rem', color: step >= 2 ? '#fff' : 'var(--text-muted)', fontWeight: 600 }}>Review details & Geotag</span>
           </div>
         </div>
 
@@ -271,12 +400,12 @@ const ReportIssue = () => {
 
         {/* Step 1: Upload Area */}
         {step === 1 && (
-          <div className="glass-panel" style={{ padding: '3rem 2rem', textAlign: 'center' }}>
+          <div className="glass-panel text-center" style={{ padding: '2.5rem 2rem' }}>
             {aiAnalyzing ? (
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
                 <Loader2 className="animate-spin" size={48} color="var(--color-primary)" />
                 <h4 style={{ color: '#fff', fontSize: '1.2rem' }}>Gemini AI is analyzing the issue...</h4>
-                <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', maxWidth: '400px' }}>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', maxWidth: '400px', marginInline: 'auto' }}>
                   We are automatically identifying the issue type, generating a description, assessing severity, and preparing safety tips.
                 </p>
                 {imagePreview && (
@@ -294,7 +423,7 @@ const ReportIssue = () => {
                     
                     {/* Left Column: Media Preview */}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                      <h4 style={{ fontSize: '1rem', color: '#fff' }}>Selected Media</h4>
+                      <h4 style={{ fontSize: '1.05rem', color: '#fff', margin: 0 }}>Selected Media Proofs ({imagePreviews.length})</h4>
                       <div style={{ position: 'relative', borderRadius: '12px', overflow: 'hidden', height: '220px', border: '1px solid var(--border-color)' }}>
                         {fileType === 'video' ? (
                           <video src={imagePreview} controls style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -302,14 +431,34 @@ const ReportIssue = () => {
                           <img src={imagePreview} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                         )}
                       </div>
+                      
+                      {/* Image Thumbnails Carousel preview */}
+                      {imagePreviews.length > 1 && (
+                        <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
+                          {imagePreviews.map((prev, idx) => (
+                            <img 
+                              key={idx} 
+                              src={prev} 
+                              alt="Thumbnail" 
+                              onClick={() => {
+                                setImagePreview(prev);
+                                setFileType(imageFiles[idx].type.startsWith('video/') ? 'video' : 'image');
+                              }}
+                              style={{ width: '50px', height: '50px', objectFit: 'cover', borderRadius: '6px', cursor: 'pointer', border: imagePreview === prev ? '2px solid var(--color-primary)' : '1px solid var(--border-color)' }} 
+                            />
+                          ))}
+                        </div>
+                      )}
+
                       <label className="btn btn-secondary" style={{ width: '100%', cursor: 'pointer', textAlign: 'center' }}>
                         <input
                           type="file"
+                          multiple
                           accept="image/*,video/*"
                           onChange={handleImageChange}
                           style={{ display: 'none' }}
                         />
-                        <span>Change Photo/Video</span>
+                        <span>Change / Add Photos & Videos</span>
                       </label>
                     </div>
 
@@ -317,10 +466,10 @@ const ReportIssue = () => {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-color)', padding: '1.25rem', borderRadius: '12px' }}>
                       <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                         <Mic color="var(--color-primary)" size={20} />
-                        <h4 style={{ fontSize: '1rem', color: '#fff', margin: 0 }}>Native Voice Description</h4>
+                        <h4 style={{ fontSize: '1.05rem', color: '#fff', margin: 0 }}>Native Voice Description</h4>
                       </div>
                       <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: '1.4' }}>
-                        Describe the problem in your local language (e.g. Hindi, Kannada, etc.). Gemini AI will translate and incorporate it into the report!
+                        Describe the problem in your local language (e.g. Hindi, Kannada, Tamil). Gemini AI will translate and incorporate it into the report details!
                       </p>
 
                       {isRecording ? (
@@ -366,7 +515,7 @@ const ReportIssue = () => {
                               style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', justifyContent: 'center', padding: '0.75rem' }}
                             >
                               <Mic size={16} />
-                              <span>Start Local Voice Recording</span>
+                              <span>Start Voice Recording Description</span>
                             </button>
                           )}
                         </div>
@@ -382,7 +531,7 @@ const ReportIssue = () => {
                     className="btn btn-primary"
                     style={{ width: '100%', padding: '0.85rem', background: 'linear-gradient(to right, var(--color-primary), #8b5cf6)', border: 'none', fontSize: '1rem', fontWeight: 'bold' }}
                   >
-                    Scan Issue & AI Analyze with Gemini
+                    Scan & AI Pre-Fill Details with Gemini
                   </button>
                 </div>
               ) : (
@@ -398,22 +547,23 @@ const ReportIssue = () => {
                     justifyContent: 'center',
                     marginBottom: '1.5rem'
                   }}>
-                    <Camera size={36} />
+                    <UploadCloud size={36} />
                   </div>
                   <h3 style={{ fontSize: '1.4rem', color: '#fff', marginBottom: '0.5rem' }}>Upload Community Problem Media</h3>
                   <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '2rem', maxWidth: '500px', marginInline: 'auto' }}>
-                    Upload a clear image or video of a pothole, leaking water pipe, trash heap, or damaged streetlight. 
-                    Our multimodal AI will automatically categorize and describe the problem details.
+                    Upload clear images/videos of a pothole, leaking water pipe, trash heap, or damaged streetlight. 
+                    Our AI will auto-fill report categories and description parameters.
                   </p>
 
                   <label className="btn btn-primary" style={{ padding: '0.85rem 2rem', cursor: 'pointer' }}>
                     <input
                       type="file"
+                      multiple
                       accept="image/*,video/*"
                       onChange={handleImageChange}
                       style={{ display: 'none' }}
                     />
-                    <span>Select Image or Video file</span>
+                    <span>Select Images / Videos</span>
                   </label>
                 </div>
               )
@@ -434,7 +584,7 @@ const ReportIssue = () => {
               </span>
             </div>
 
-            <div className="grid-2">
+            <div className="grid-2" style={{ gap: '1.5rem' }}>
               <div>
                 <div className="form-group">
                   <label className="form-label">Suggested Report Title</label>
@@ -552,9 +702,9 @@ const ReportIssue = () => {
               </div>
 
               <div>
-                {/* Image Preview */}
+                {/* Image Previews */}
                 <div style={{ marginBottom: '1.5rem' }}>
-                  <label className="form-label">Uploaded Media Reference</label>
+                  <label className="form-label">Uploaded Media ({imagePreviews.length} files)</label>
                   {imagePreview && (
                     fileType === 'video' ? (
                       <video 
@@ -570,6 +720,23 @@ const ReportIssue = () => {
                       />
                     )
                   )}
+
+                  {imagePreviews.length > 1 && (
+                    <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', marginTop: '8px' }}>
+                      {imagePreviews.map((prev, idx) => (
+                        <img 
+                          key={idx} 
+                          src={prev} 
+                          alt="Thumbnail" 
+                          onClick={() => {
+                            setImagePreview(prev);
+                            setFileType(imageFiles[idx].type.startsWith('video/') ? 'video' : 'image');
+                          }}
+                          style={{ width: '40px', height: '40px', objectFit: 'cover', borderRadius: '4px', cursor: 'pointer', border: imagePreview === prev ? '2px solid var(--color-primary)' : '1px solid var(--border-color)' }} 
+                        />
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {/* AI Safety Banner */}
@@ -579,7 +746,6 @@ const ReportIssue = () => {
                     border: '1px solid rgba(99, 102, 241, 0.2)',
                     padding: '0.85rem',
                     borderRadius: '12px',
-                    marginBottom: '1.5rem',
                     display: 'flex',
                     alignItems: 'flex-start',
                     gap: '0.5rem'
@@ -603,7 +769,7 @@ const ReportIssue = () => {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem', flexWrap: 'wrap', gap: '10px' }}>
                 <h4 style={{ fontSize: '1rem', color: '#fff', margin: 0, display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
                   <MapPin size={18} color="var(--color-primary)" />
-                  <span>Geotag Report coordinates</span>
+                  <span>Geotag Report Coordinates</span>
                 </h4>
                 <button
                   type="button"
@@ -612,7 +778,7 @@ const ReportIssue = () => {
                   onClick={handleUseCurrentLocation}
                 >
                   <MapPin size={14} />
-                  <span>Use Current Location</span>
+                  <span>Use GPS Current Location</span>
                 </button>
               </div>
               <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginBottom: '1rem' }}>
@@ -621,7 +787,7 @@ const ReportIssue = () => {
 
               <MapComponent clickable={true} onLocationSelect={handleLocationSelect} center={[formData.latitude, formData.longitude]} zoom={15} />
 
-              <div className="grid-2" style={{ marginTop: '1rem' }}>
+              <div className="grid-2" style={{ marginTop: '1rem', gap: '1rem' }}>
                 <div className="form-group">
                   <label className="form-label">Latitude</label>
                   <input
@@ -646,6 +812,82 @@ const ReportIssue = () => {
                     required
                   />
                 </div>
+              </div>
+
+              {/* Automatic Area Detection display */}
+              <div style={{ background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-color)', padding: '1.25rem', borderRadius: '12px', marginTop: '1rem' }}>
+                <span style={{ fontSize: '0.8rem', color: 'var(--color-primary)', fontWeight: 'bold', display: 'block', marginBottom: '0.75rem' }}>
+                  {geocodingLoading ? 'DETECTING LOCATION ADDRESS...' : 'AUTOMATIC AREA DETECTION (OSM)'}
+                </span>
+
+                {geocodingLoading ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                    <Loader2 className="animate-spin" size={16} />
+                    <span>Resolving GPS coordinates to Indian local administrative zones...</span>
+                  </div>
+                ) : (
+                  <div className="grid-2" style={{ gap: '0.75rem' }}>
+                    <div className="form-group">
+                      <label className="form-label">State</label>
+                      <input
+                        type="text"
+                        name="state"
+                        value={formData.state}
+                        onChange={handleInputChange}
+                        placeholder="State"
+                        className="form-control"
+                        required
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">District</label>
+                      <input
+                        type="text"
+                        name="district"
+                        value={formData.district}
+                        onChange={handleInputChange}
+                        placeholder="District"
+                        className="form-control"
+                        required
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">City/Town</label>
+                      <input
+                        type="text"
+                        name="city"
+                        value={formData.city}
+                        onChange={handleInputChange}
+                        placeholder="City"
+                        className="form-control"
+                        required
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Village/Ward</label>
+                      <input
+                        type="text"
+                        name="village"
+                        value={formData.village}
+                        onChange={handleInputChange}
+                        placeholder="Village/Ward"
+                        className="form-control"
+                        required
+                      />
+                    </div>
+                    <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                      <label className="form-label">Landmark / Local Road Address</label>
+                      <input
+                        type="text"
+                        name="landmark"
+                        value={formData.landmark}
+                        onChange={handleInputChange}
+                        placeholder="Near Metro Pillar 42"
+                        className="form-control"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 

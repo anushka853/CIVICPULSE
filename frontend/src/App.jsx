@@ -34,7 +34,7 @@ const ProtectedRoute = ({ children, requireAdmin = false, requireRole = null }) 
 };
 
 function App() {
-  const { user } = useContext(GlobalContext);
+  const { user, toast, setToast } = useContext(GlobalContext);
   const location = useLocation();
 
   // Don't render sidebar/header layout on the Login page
@@ -51,6 +51,75 @@ function App() {
 
   return (
     <div className="app-container">
+      {toast && (
+        <div style={{
+          position: 'fixed',
+          top: '24px',
+          right: '24px',
+          background: 'rgba(30, 41, 59, 0.75)',
+          backdropFilter: 'blur(12px)',
+          border: `1px solid ${
+            toast.type === 'success' 
+              ? 'rgba(16, 185, 129, 0.4)' 
+              : toast.type === 'error' 
+                ? 'rgba(239, 68, 68, 0.4)' 
+                : toast.type === 'warning' 
+                  ? 'rgba(245, 158, 11, 0.4)' 
+                  : 'rgba(14, 165, 233, 0.4)'
+          }`,
+          boxShadow: '0 20px 40px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05)',
+          color: '#fff',
+          padding: '1rem 1.25rem',
+          borderRadius: '16px',
+          zIndex: 99999,
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.75rem',
+          maxWidth: '350px',
+          animation: 'slide-in 0.3s ease forwards'
+        }}>
+          <div style={{
+            width: '8px',
+            height: '8px',
+            borderRadius: '50%',
+            backgroundColor: 
+              toast.type === 'success' 
+                ? 'var(--color-secondary)' 
+                : toast.type === 'error' 
+                  ? 'var(--color-danger)' 
+                  : toast.type === 'warning' 
+                    ? 'var(--color-warning)' 
+                    : 'var(--color-primary)',
+            boxShadow: `0 0 10px ${
+              toast.type === 'success' 
+                ? 'var(--color-secondary)' 
+                : toast.type === 'error' 
+                  ? 'var(--color-danger)' 
+                  : toast.type === 'warning' 
+                    ? 'var(--color-warning)' 
+                    : 'var(--color-primary)'
+            }`
+          }} />
+          <span style={{ fontSize: '0.85rem', fontWeight: 600, flexGrow: 1 }}>{toast.message}</span>
+          <button 
+            onClick={() => setToast(null)}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: 'var(--text-muted)',
+              cursor: 'pointer',
+              fontSize: '1.2rem',
+              lineHeight: 1,
+              padding: '0 4px',
+              transition: 'color 0.2s'
+            }}
+            onMouseOver={(e) => e.target.style.color = '#fff'}
+            onMouseOut={(e) => e.target.style.color = 'var(--text-muted)'}
+          >
+            ×
+          </button>
+        </div>
+      )}
       <Sidebar />
       <main className="main-content">
         <Routes>

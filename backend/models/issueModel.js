@@ -31,6 +31,10 @@ const issueSchema = new mongoose.Schema(
       type: String, // URL/Path to uploaded photo
       required: true,
     },
+    images: {
+      type: [String],
+      default: [],
+    },
     latitude: {
       type: Number,
       required: true,
@@ -38,6 +42,21 @@ const issueSchema = new mongoose.Schema(
     longitude: {
       type: Number,
       required: true,
+    },
+    state: {
+      type: String,
+    },
+    district: {
+      type: String,
+    },
+    city: {
+      type: String,
+    },
+    village: {
+      type: String,
+    },
+    landmark: {
+      type: String,
     },
     severity: {
       type: String,
@@ -82,6 +101,10 @@ const issueSchema = new mongoose.Schema(
     },
     aiResolutionConfidence: {
       type: Number, // Percentage of AI confidence in resolution
+    },
+    aiResolutionResult: {
+      type: String,
+      enum: ['Cleaned', 'Partially Cleaned', 'Not Cleaned'],
     },
     aiResolutionDetails: {
       type: String, // AI notes on verification comparison

@@ -1,8 +1,10 @@
 import Issue from '../models/issueModel.js';
 import User from '../models/userModel.js';
 import Activity from '../models/activityModel.js';
-import { analyzeIssueImage, verifyIssueResolution } from '../config/geminiService.js';
+import { analyzeIssueImage, verifyIssueResolution, recommendStaffForIssue } from '../config/geminiService.js';
 import { checkAndAssignBadges } from './userController.js';
+import { sendEmail } from '../utils/emailService.js';
+import { sendRealTimeNotification } from '../server.js';
 import path from 'path';
 
 // Helper to log system/citizen activities
@@ -58,8 +60,14 @@ export const createIssue = async (req, res) => {
     description,
     category,
     image,
+    images,
     latitude,
     longitude,
+    state,
+    district,
+    city,
+    village,
+    landmark,
     severity,
     safetySuggestions,
   } = req.body;
@@ -71,8 +79,14 @@ export const createIssue = async (req, res) => {
       description,
       category,
       image,
+      images: images && images.length > 0 ? images : [image],
       latitude: Number(latitude),
       longitude: Number(longitude),
+      state,
+      district,
+      city,
+      village,
+      landmark,
       severity,
       safetySuggestions,
     });
@@ -85,6 +99,27 @@ export const createIssue = async (req, res) => {
       checkAndAssignBadges(user);
       await user.save();
       await logActivity(req.user._id, `${user.name} reported a new issue: "${title}" (+10 XP)`, 'report');
+      
+      // In-app real-time notifications
+      sendRealTimeNotification(req.user._id, { text: `Your complaint "${title}" has been successfully reported (+10 XP).`, type: 'success' });
+      sendRealTimeNotification(null, { text: `New community report: "${title}" in ${city || state}`, type: 'info' });
+
+
+      // Send email to Citizen
+      await sendEmail({
+        to: user.email,
+        subject: `[CivicPulse] Complaint Filed: ${title}`,
+        text: `Hello ${user.name},\n\nYour complaint "${title}" in category "${category}" has been filed.\nLocation: State: ${state}, District: ${district}, City: ${city}, Village/Ward: ${village}.\n\nThank you for active civic contribution!`,
+        html: `<h3>Hello ${user.name},</h3><p>Your complaint <strong>"${title}"</strong> has been successfully reported.</p><p><strong>Location:</strong> ${village}, ${city}, ${district}, ${state}</p><p>We will assign a working staff member shortly.</p>`
+      });
+
+      // Send email to Admin
+      await sendEmail({
+        to: 'admin@civicpulse.gov.in',
+        subject: `[ALERT] New Complaint Filed: ${title}`,
+        text: `A new complaint has been filed by ${user.name}.\nTitle: ${title}\nCategory: ${category}\nSeverity: ${severity}\nLocation details: State: ${state}, District: ${district}, City: ${city}, Village: ${village}.`,
+        html: `<h3>New Complaint Alert</h3><p>A new complaint has been filed by citizen <strong>${user.name}</strong>.</p><p><strong>Title:</strong> ${title}</p><p><strong>Severity:</strong> ${severity}</p><p>Please assign a working staff member to resolve it.</p>`
+      });
     }
 
     res.status(201).json(issue);
@@ -211,6 +246,30 @@ export const verifyIssue = async (req, res) => {
             issue.status = 'In Progress';
             issue.cost = cost;
             await logActivity(staffUser._id, `System auto-routed and assigned ${staffUser.name} to resolve "${issue.title}". Status set to IN PROGRESS.`, 'assign');
+            
+            // In-app real-time notifications
+            sendRealTimeNotification(staffUser._id, { text: `You have been auto-assigned to resolve the complaint: "${issue.title}".`, type: 'info' });
+            sendRealTimeNotification(issue.reporter, { text: `Your complaint "${issue.title}" has been assigned to ${staffUser.name}.`, type: 'info' });
+
+
+            // Send notification email to Staff
+            await sendEmail({
+              to: staffUser.email,
+              subject: `[Task Assigned] New Cleanup Job: ${issue.title}`,
+              text: `Hello ${staffUser.name},\n\nYou have been auto-assigned to resolve the complaint "${issue.title}".\nLocation: https://maps.google.com/?q=${issue.latitude},${issue.longitude}\n\nPlease check your workspace dashboard for details.`,
+              html: `<h3>Task Assigned</h3><p>Hello ${staffUser.name},</p><p>You have been assigned to: <strong>"${issue.title}"</strong>.</p>`
+            });
+
+            // Send email to Citizen Reporter
+            const reporter = await User.findById(issue.reporter);
+            if (reporter) {
+              await sendEmail({
+                to: reporter.email,
+                subject: `[CivicPulse] Complaint Assigned: ${issue.title}`,
+                text: `Hello ${reporter.name},\n\nYour reported complaint "${issue.title}" has been assigned to field worker ${staffUser.name}.\nCleanup is starting soon!`,
+                html: `<h3>Complaint Status Update</h3><p>Your reported issue has been assigned to field worker <strong>${staffUser.name}</strong>.</p>`
+              });
+            }
           }
         }
       }
@@ -291,6 +350,7 @@ export const resolveIssue = async (req, res) => {
     issue.status = 'Resolved';
     issue.resolutionImage = resolvedRelativePath;
     issue.aiResolutionConfidence = verification.confidence;
+    issue.aiResolutionResult = verification.result;
     issue.aiResolutionDetails = verification.details;
     issue.resolvedBy = req.user._id;
     issue.resolvedAt = Date.now();
@@ -304,6 +364,18 @@ export const resolveIssue = async (req, res) => {
       checkAndAssignBadges(reporter);
       await reporter.save();
       await logActivity(reporter._id, `${reporter.name}'s reported issue "${issue.title}" has been RESOLVED! (+50 XP)`, 'resolve');
+      
+      // In-app real-time notification
+      sendRealTimeNotification(reporter._id, { text: `Your reported complaint "${issue.title}" has been RESOLVED! (+50 XP)`, type: 'success' });
+
+
+      // Email citizen
+      await sendEmail({
+        to: reporter.email,
+        subject: `[RESOLVED] Complaint "${issue.title}" Verified Cleaned`,
+        text: `Hello ${reporter.name},\n\nWe are pleased to inform you that your reported complaint "${issue.title}" has been officially resolved.\nGemini AI verification match: ${verification.result} (Confidence: ${verification.confidence}%).\n\nThank you for your active participation!`,
+        html: `<h3>Hello ${reporter.name},</h3><p>Your reported complaint <strong>"${issue.title}"</strong> has been successfully resolved.</p><p><strong>AI Audit verdict:</strong> ${verification.result} (${verification.confidence}% confidence)</p><p>Thank you for contributing to a Clean India!</p>`
+      });
     }
 
     // Reward assigned staff: +20 XP
@@ -314,6 +386,18 @@ export const resolveIssue = async (req, res) => {
         checkAndAssignBadges(staff);
         await staff.save();
         await logActivity(staff._id, `Staff member ${staff.name} earned +20 XP for resolving "${issue.title}"`, 'resolve');
+        
+        // In-app real-time notification
+        sendRealTimeNotification(staff._id, { text: `Your proof for "${issue.title}" was approved by Admin! (+20 XP)`, type: 'success' });
+
+
+        // Email staff
+        await sendEmail({
+          to: staff.email,
+          subject: `[Audit Approved] Task Approved: ${issue.title}`,
+          text: `Hello ${staff.name},\n\nYour submitted proof for "${issue.title}" has been approved by the Admin.\nAI Verdict: ${verification.result} (Confidence: ${verification.confidence}%).\n\nYou earned +20 XP!`,
+          html: `<h3>Audit Approved</h3><p>Hello ${staff.name},</p><p>Your submitted proof for <strong>"${issue.title}"</strong> has been approved.</p><p><strong>AI Verdict:</strong> ${verification.result} (${verification.confidence}% confidence)</p>`
+        });
       }
     }
 
@@ -376,6 +460,29 @@ export const checkInStaff = async (req, res) => {
     await issue.save();
 
     await logActivity(req.user._id, `Staff member ${req.user.name} checked-in at location for "${issue.title}"`, 'assign');
+    
+    // In-app real-time notification
+    sendRealTimeNotification(issue.reporter, { text: `Staff worker ${req.user.name} has checked-in and started cleaning "${issue.title}".`, type: 'info' });
+
+
+    // Notify Reporter
+    const reporter = await User.findById(issue.reporter);
+    if (reporter) {
+      await sendEmail({
+        to: reporter.email,
+        subject: `[CivicPulse] Cleaning Started: ${issue.title}`,
+        text: `Hello ${reporter.name},\n\nStaff worker "${req.user.name}" has arrived at the coordinates and checked-in. Cleanup is now in progress!`,
+        html: `<h3>Cleanup In Progress</h3><p>Hello ${reporter.name},</p><p>Staff worker <strong>${req.user.name}</strong> has arrived at the location and checked-in. Cleanup has started!</p>`
+      });
+    }
+
+    // Notify Admin
+    await sendEmail({
+      to: 'admin@civicpulse.gov.in',
+      subject: `[ALERT] Staff Checked-In: ${issue.title}`,
+      text: `Staff worker "${req.user.name}" has checked-in at the location of complaint "${issue.title}".`,
+      html: `<h3>Staff Checked-In</h3><p>Staff worker <strong>${req.user.name}</strong> has checked-in for task <strong>"${issue.title}"</strong>.</p>`
+    });
 
     res.json(issue);
   } catch (error) {
@@ -411,6 +518,30 @@ export const completeStaffIssue = async (req, res) => {
     await issue.save();
 
     await logActivity(req.user._id, `Staff ${req.user.name} completed work on "${issue.title}". Pending Admin Audit.`, 'assign');
+    
+    // In-app real-time notifications
+    sendRealTimeNotification(issue.reporter, { text: `Field worker ${req.user.name} has finished cleaning "${issue.title}". Awaiting final audit.`, type: 'info' });
+    sendRealTimeNotification(null, { text: `Staff ${req.user.name} completed "${issue.title}". Audit required.`, type: 'info' });
+
+
+    // Notify Reporter
+    const reporter = await User.findById(issue.reporter);
+    if (reporter) {
+      await sendEmail({
+        to: reporter.email,
+        subject: `[CivicPulse] Cleanup Completed (Awaiting Verification): ${issue.title}`,
+        text: `Hello ${reporter.name},\n\nField worker ${req.user.name} has completed cleaning and uploaded verification photos.\nOur Municipal Admin is currently auditing the resolution.`,
+        html: `<h3>Cleanup Completed</h3><p>Hello ${reporter.name},</p><p>Field worker <strong>${req.user.name}</strong> has finished cleaning and uploaded photos. Awaiting final audit verification.</p>`
+      });
+    }
+
+    // Notify Admin
+    await sendEmail({
+      to: 'admin@civicpulse.gov.in',
+      subject: `[ACTION REQUIRED] Audit Task: ${issue.title}`,
+      text: `Staff worker "${req.user.name}" has marked the task "${issue.title}" as completed.\n\nPlease review proof and run the Gemini AI audit in the Admin portal.`,
+      html: `<h3>Audit Required</h3><p>Staff worker <strong>${req.user.name}</strong> has completed <strong>"${issue.title}"</strong>.</p><p>Please review proof and run the Gemini AI audit.</p>`
+    });
 
     res.json(issue);
   } catch (error) {
@@ -450,6 +581,30 @@ export const assignIssue = async (req, res) => {
     await issue.save();
 
     await logActivity(staffUser._id, `Municipal Admin manually assigned ${staffUser.name} to resolve "${issue.title}"`, 'assign');
+    
+    // In-app real-time notifications
+    sendRealTimeNotification(staffUser._id, { text: `Admin assigned you to resolve: "${issue.title}".`, type: 'info' });
+    sendRealTimeNotification(issue.reporter, { text: `Your complaint "${issue.title}" has been assigned to ${staffUser.name}.`, type: 'info' });
+
+
+    // Notify Staff
+    await sendEmail({
+      to: staffUser.email,
+      subject: `[Task Assigned] New Cleanup Job: ${issue.title}`,
+      text: `Hello ${staffUser.name},\n\nYou have been assigned to resolve the complaint "${issue.title}".\nLocation: https://maps.google.com/?q=${issue.latitude},${issue.longitude}\n\nPlease check your workspace dashboard for details.`,
+      html: `<h3>Task Assigned</h3><p>Hello ${staffUser.name},</p><p>You have been assigned to: <strong>"${issue.title}"</strong>.</p>`
+    });
+
+    // Notify Reporter
+    const reporter = await User.findById(issue.reporter);
+    if (reporter) {
+      await sendEmail({
+        to: reporter.email,
+        subject: `[CivicPulse] Complaint Assigned: ${issue.title}`,
+        text: `Hello ${reporter.name},\n\nYour reported complaint "${issue.title}" has been assigned to field worker ${staffUser.name}.\nCleanup is starting soon!`,
+        html: `<h3>Complaint Status Update</h3><p>Your reported issue has been assigned to field worker <strong>${staffUser.name}</strong>.</p>`
+      });
+    }
 
     res.json(issue);
   } catch (error) {
@@ -595,3 +750,26 @@ export const getAnalytics = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+// @desc    Recommend best staff member for an issue using Gemini AI
+// @route   GET /api/issues/:id/recommend-staff
+// @access  Private/Admin
+export const recommendStaff = async (req, res) => {
+  try {
+    const issue = await Issue.findById(req.params.id);
+    if (!issue) {
+      return res.status(404).json({ message: 'Issue not found' });
+    }
+
+    const staffList = await User.find({ role: 'Staff' }).select('name email points level state district city village serviceArea workingRadius');
+    if (staffList.length === 0) {
+      return res.status(400).json({ message: 'No working staff members found' });
+    }
+
+    const recommendation = await recommendStaffForIssue(issue, staffList);
+    res.json(recommendation);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
